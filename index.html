@@ -21,6 +21,20 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        /* Loading spinner animation */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 24px;
+            height: 24px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-gray-100 font-sans overflow-hidden">
@@ -31,20 +45,27 @@
         <!-- Sidebar (Menu Lateral) -->
         <div class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-10">
             <!-- Logo / Título -->
-            <div class="p-6 border-b border-slate-700 flex items-center gap-3">
-                <i data-lucide="layout-grid" class="w-6 h-6 text-green-400"></i>
-                <h1 class="text-xl font-bold tracking-wider">GestorSheets</h1>
+            <div class="p-6 border-b border-slate-700 flex items-center justify-between gap-2">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="layout-grid" class="w-6 h-6 text-green-400"></i>
+                    <h1 class="text-xl font-bold tracking-wider">GestorSheets</h1>
+                </div>
+                <!-- Indicador de Status -->
+                <div id="connection-status" class="w-2 h-2 rounded-full bg-red-500" title="Desconectado"></div>
             </div>
 
             <!-- Lista de Lojas -->
-            <div class="flex-1 overflow-y-auto py-4 scrollbar-hide" id="store-list">
+            <div class="flex-1 overflow-y-auto py-4 scrollbar-hide relative" id="store-list">
+                <!-- Loader inicial -->
+                <div id="initial-loader" class="flex justify-center mt-10">
+                    <div class="loader border-t-green-400"></div>
+                </div>
                 <!-- As lojas serão inseridas aqui via JavaScript -->
-                <p class="text-slate-500 text-center text-sm px-4 mt-4">Nenhuma loja cadastrada.</p>
             </div>
 
             <!-- Botão de Configuração -->
             <div class="p-4 border-t border-slate-700 bg-slate-800">
-                <button onclick="openConfigModal()" class="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded transition-colors text-sm font-medium">
+                <button onclick="window.openConfigModal()" class="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded transition-colors text-sm font-medium">
                     <i data-lucide="settings" class="w-4 h-4"></i>
                     Gerenciar Lojas
                 </button>
@@ -86,8 +107,8 @@
     <div id="config-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                <h3 class="text-lg font-semibold text-gray-800">Configuração de Lojas</h3>
-                <button onclick="closeConfigModal()" class="text-gray-400 hover:text-gray-600">
+                <h3 class="text-lg font-semibold text-gray-800">Configuração de Lojas (Nuvem)</h3>
+                <button onclick="window.closeConfigModal()" class="text-gray-400 hover:text-gray-600">
                     <i data-lucide="x" class="w-6 h-6"></i>
                 </button>
             </div>
@@ -105,7 +126,7 @@
                             <input type="text" id="new-store-url" placeholder="Link da Planilha Google" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
                         </div>
                         <div class="md:col-span-2">
-                            <button onclick="addStore()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm font-medium transition-colors">
+                            <button id="btn-add" onclick="window.addStore()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm font-medium transition-colors flex justify-center items-center">
                                 Adicionar
                             </button>
                         </div>
@@ -134,28 +155,39 @@
                         <div id="no-stores-msg" class="p-8 text-center text-gray-500 hidden">
                             Nenhuma loja configurada ainda.
                         </div>
+                        <div id="loading-msg" class="p-8 text-center text-gray-500 hidden flex justify-center">
+                             <div class="loader"></div>
+                        </div>
                     </div>
                 </div>
 
             </div>
             
             <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-                <button onclick="closeConfigModal()" class="px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded text-sm font-medium transition-colors">
+                <button onclick="window.closeConfigModal()" class="px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded text-sm font-medium transition-colors">
                     Concluir e Salvar
                 </button>
             </div>
         </div>
     </div>
 
-    <script>
-        // Inicialização dos ícones
-        lucide.createIcons();
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Estado da aplicação (carrega do LocalStorage ou inicia vazio)
-        let stores = JSON.parse(localStorage.getItem('myStorePortalData')) || [
-            // Exemplo inicial para o usuário não ver tudo vazio (opcional)
-            // { id: 1, name: 'Exemplo - Loja Matriz', url: 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit' }
-        ];
+        // Configuração Firebase
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        // Variáveis de Estado
+        let stores = []; 
+        let currentUser = null;
+        const COLLECTION_NAME = 'stores';
 
         // Referências DOM
         const storeListEl = document.getElementById('store-list');
@@ -166,89 +198,92 @@
         const configModal = document.getElementById('config-modal');
         const configStoreListEl = document.getElementById('config-store-list');
         const noStoresMsg = document.getElementById('no-stores-msg');
+        const loadingMsg = document.getElementById('loading-msg');
+        const initialLoader = document.getElementById('initial-loader');
+        const connectionStatus = document.getElementById('connection-status');
+        const btnAdd = document.getElementById('btn-add');
 
-        // Renderizar Menu Lateral
-        function renderSidebar() {
-            storeListEl.innerHTML = '';
-            
-            if (stores.length === 0) {
-                storeListEl.innerHTML = `<p class="text-slate-500 text-center text-sm px-4 mt-4 italic">Clique em "Gerenciar Lojas" abaixo para começar.</p>`;
-                return;
+        // Inicialização: Autenticação Anônima
+        async function initApp() {
+            try {
+                // Tentamos usar token customizado se existir (ambiente de dev) ou anônimo
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                     // Lógica interna para ambiente seguro, se aplicável
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Erro na autenticação:", error);
+                await signInAnonymously(auth);
             }
-
-            stores.forEach((store, index) => {
-                const btn = document.createElement('button');
-                btn.className = 'w-full text-left px-6 py-3 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors border-l-4 border-transparent hover:border-green-400 focus:outline-none focus:bg-slate-800 focus:border-green-400 group flex items-center justify-between';
-                btn.onclick = () => loadStore(index);
-                btn.innerHTML = `
-                    <span class="font-medium truncate">${store.name}</span>
-                    <i data-lucide="chevron-right" class="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500"></i>
-                `;
-                storeListEl.appendChild(btn);
-            });
-            lucide.createIcons();
         }
+        
+        // Listener de Autenticação e Dados
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                connectionStatus.classList.remove('bg-red-500');
+                connectionStatus.classList.add('bg-green-500');
+                connectionStatus.title = "Conectado e Sincronizado";
+                
+                // Configurar Listener do Firestore (Tempo Real)
+                // Usamos 'public' para que todos com acesso ao sistema vejam as mesmas lojas
+                const q = query(
+                    collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME),
+                    orderBy('createdAt', 'asc')
+                );
 
-        // Renderizar Lista no Modal de Configuração
-        function renderConfigList() {
-            configStoreListEl.innerHTML = '';
-            
-            if (stores.length === 0) {
-                noStoresMsg.classList.remove('hidden');
-            } else {
-                noStoresMsg.classList.add('hidden');
-                stores.forEach((store, index) => {
-                    const tr = document.createElement('tr');
-                    tr.className = 'hover:bg-gray-50';
-                    tr.innerHTML = `
-                        <td class="px-4 py-3 font-medium text-gray-800">${store.name}</td>
-                        <td class="px-4 py-3 text-gray-500 text-xs font-mono truncate max-w-[200px]">${store.url}</td>
-                        <td class="px-4 py-3 text-right">
-                            <button onclick="deleteStore(${index})" class="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors" title="Remover">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            </button>
-                        </td>
-                    `;
-                    configStoreListEl.appendChild(tr);
+                onSnapshot(q, (snapshot) => {
+                    stores = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    
+                    // Remover loader inicial se existir
+                    if(initialLoader) initialLoader.classList.add('hidden');
+                    
+                    renderSidebar();
+                    renderConfigList();
+                }, (error) => {
+                    console.error("Erro ao buscar dados:", error);
+                    storeListEl.innerHTML = `<p class="text-red-400 text-center text-sm p-4">Erro ao carregar lojas. Tente recarregar.</p>`;
                 });
-                lucide.createIcons();
+            } else {
+                connectionStatus.classList.add('bg-red-500');
+                connectionStatus.classList.remove('bg-green-500');
             }
-        }
+        });
 
-        // Carregar Planilha no Iframe
-        function loadStore(index) {
+        // Funções Globais (Expostas para o HTML)
+        
+        window.loadStore = function(index) {
             const store = stores[index];
+            if(!store) return;
             
-            // Atualiza UI
             currentTitleEl.textContent = store.name;
             emptyStateEl.classList.add('hidden');
             iframeEl.classList.remove('hidden');
             externalLinkBtn.classList.remove('hidden');
             externalLinkBtn.href = store.url;
             
-            // Tratamento da URL do Google Sheets para modo "embed" (melhor visualização)
-            // Se for um link de 'edit', tentamos manter, mas o ideal para visualização limpa é 'preview' ou 'htmlembed'
-            // Mas o usuário quer EDITAR, então mantemos a URL original ou limpamos parâmetros extras.
-            
-            // Dica: Adicionar ?widget=true&headers=false remove o topo do Google, mas remove o menu de edição também.
-            // Para editar, precisamos da URL normal.
-            
             iframeEl.src = store.url;
 
-            // Feedback visual no menu lateral (active state)
+            // Feedback visual no menu
             const buttons = storeListEl.querySelectorAll('button');
             buttons.forEach(b => {
                 b.classList.remove('bg-slate-800', 'border-green-400', 'text-white');
                 b.classList.add('border-transparent');
             });
+            // O botão pode não existir se a lista mudou, então buscamos pelo índice
             if (buttons[index]) {
                 buttons[index].classList.add('bg-slate-800', 'border-green-400', 'text-white');
                 buttons[index].classList.remove('border-transparent');
             }
-        }
+        };
 
-        // Adicionar Loja
-        function addStore() {
+        window.addStore = async function() {
+            if (!currentUser) return;
+            
             const nameInput = document.getElementById('new-store-name');
             const urlInput = document.getElementById('new-store-url');
             
@@ -260,60 +295,115 @@
                 return;
             }
 
-            // Validação simples de URL
             if (!url.startsWith('http')) {
                 url = 'https://' + url;
             }
 
-            stores.push({ name, url });
-            saveData();
-            
-            // Limpar inputs
-            nameInput.value = '';
-            urlInput.value = '';
-            
+            // UI Loading state
+            btnAdd.disabled = true;
+            btnAdd.innerHTML = '<div class="loader w-4 h-4 border-white border-t-blue-600"></div>';
+
+            try {
+                // Salvar no Firestore
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), {
+                    name: name,
+                    url: url,
+                    createdAt: serverTimestamp()
+                });
+                
+                // Limpar inputs
+                nameInput.value = '';
+                urlInput.value = '';
+                // Não precisamos chamar render() aqui, o onSnapshot fará isso automaticamente
+            } catch (error) {
+                console.error("Erro ao adicionar:", error);
+                alert("Erro ao salvar. Verifique sua conexão.");
+            } finally {
+                btnAdd.disabled = false;
+                btnAdd.textContent = 'Adicionar';
+            }
+        };
+
+        window.deleteStore = async function(id) {
+            if(confirm('Tem certeza que deseja remover esta loja para todos os usuários?')) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id));
+                    // Se a loja deletada estava aberta, resetamos a view
+                    iframeEl.classList.add('hidden');
+                    emptyStateEl.classList.remove('hidden');
+                    externalLinkBtn.classList.add('hidden');
+                    currentTitleEl.textContent = 'Selecione uma loja';
+                } catch (error) {
+                    console.error("Erro ao deletar:", error);
+                    alert("Erro ao remover item.");
+                }
+            }
+        };
+
+        window.openConfigModal = function() {
             renderConfigList();
-            renderSidebar();
+            configModal.classList.remove('hidden');
+        };
+
+        window.closeConfigModal = function() {
+            configModal.classList.add('hidden');
+        };
+
+        // Render Functions
+        function renderSidebar() {
+            storeListEl.innerHTML = '';
+            
+            if (stores.length === 0) {
+                storeListEl.innerHTML = `<p class="text-slate-500 text-center text-sm px-4 mt-4 italic">Clique em "Gerenciar Lojas" abaixo para começar.</p>`;
+                return;
+            }
+
+            stores.forEach((store, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left px-6 py-3 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors border-l-4 border-transparent hover:border-green-400 focus:outline-none focus:bg-slate-800 focus:border-green-400 group flex items-center justify-between';
+                btn.onclick = () => window.loadStore(index);
+                btn.innerHTML = `
+                    <span class="font-medium truncate">${store.name}</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500"></i>
+                `;
+                storeListEl.appendChild(btn);
+            });
+            lucide.createIcons();
         }
 
-        // Deletar Loja
-        function deleteStore(index) {
-            if(confirm('Tem certeza que deseja remover esta loja?')) {
-                stores.splice(index, 1);
-                saveData();
-                renderConfigList();
-                renderSidebar();
-                
-                // Se removeu a loja ativa, reseta a view
-                iframeEl.classList.add('hidden');
-                emptyStateEl.classList.remove('hidden');
-                externalLinkBtn.classList.add('hidden');
-                currentTitleEl.textContent = 'Selecione uma loja';
+        function renderConfigList() {
+            configStoreListEl.innerHTML = '';
+            
+            if (stores.length === 0) {
+                noStoresMsg.classList.remove('hidden');
+            } else {
+                noStoresMsg.classList.add('hidden');
+                stores.forEach((store) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50';
+                    tr.innerHTML = `
+                        <td class="px-4 py-3 font-medium text-gray-800">${store.name}</td>
+                        <td class="px-4 py-3 text-gray-500 text-xs font-mono truncate max-w-[200px]">${store.url}</td>
+                        <td class="px-4 py-3 text-right">
+                            <button onclick="window.deleteStore('${store.id}')" class="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors" title="Remover">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </td>
+                    `;
+                    configStoreListEl.appendChild(tr);
+                });
+                lucide.createIcons();
             }
         }
 
-        // Persistência
-        function saveData() {
-            localStorage.setItem('myStorePortalData', JSON.stringify(stores));
-        }
-
-        // Modal Logic
-        function openConfigModal() {
-            renderConfigList();
-            configModal.classList.remove('hidden');
-        }
-
-        function closeConfigModal() {
-            configModal.classList.add('hidden');
-        }
-
+        // Setup inicial
+        lucide.createIcons();
+        initApp();
+        
         // Fechar modal ao clicar fora
         configModal.addEventListener('click', (e) => {
-            if (e.target === configModal) closeConfigModal();
+            if (e.target === configModal) window.closeConfigModal();
         });
-
-        // Inicialização
-        renderSidebar();
 
     </script>
 </body>
