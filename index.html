@@ -183,25 +183,15 @@
         // Cole sua configuração do Firebase abaixo para usar seu próprio projeto.
         // Se deixar vazio (null), o sistema tentará usar a config interna do chat (só funciona aqui).
         
-        const firebaseConfig = {
-  apiKey: "AIzaSyDKnOop0iczUQzgGNNruwytPQCcUgY7QGA",
-  authDomain: "gestorlojas-b0e01.firebaseapp.com",
-  projectId: "gestorlojas-b0e01",
-  storageBucket: "gestorlojas-b0e01.firebasestorage.app",
-  messagingSenderId: "1094446006782",
-  appId: "1:1094446006782:web:875e86a4b6edcabf3c80af"
-}; 
-        
-        /* EXEMPLO DE COMO DEVE FICAR:
-        const YOUR_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyD-...",
-            authDomain: "seu-projeto.firebaseapp.com",
-            projectId: "seu-projeto",
-            storageBucket: "seu-projeto.appspot.com",
-            messagingSenderId: "123456...",
-            appId: "1:1234..."
+        const manualConfig = {
+            apiKey: "AIzaSyDKnOop0iczUQzgGNNruwytPQCcUgY7QGA",
+            authDomain: "gestorlojas-b0e01.firebaseapp.com",
+            projectId: "gestorlojas-b0e01",
+            storageBucket: "gestorlojas-b0e01.firebasestorage.app",
+            messagingSenderId: "1094446006782",
+            appId: "1:1094446006782:web:875e86a4b6edcabf3c80af"
         };
-        */
+        
         // =========================================================================
 
         // Determina qual configuração usar (Sua pessoal OU a do ambiente de teste)
@@ -209,8 +199,8 @@
         let appId = 'meu-portal-lojas'; // Nome padrão para seu uso pessoal
 
         try {
-            if (YOUR_FIREBASE_CONFIG) {
-                firebaseConfig = YOUR_FIREBASE_CONFIG;
+            if (manualConfig) {
+                firebaseConfig = manualConfig;
                 console.log("Usando configuração pessoal do Firebase.");
             } else if (typeof __firebase_config !== 'undefined') {
                 firebaseConfig = JSON.parse(__firebase_config);
@@ -221,7 +211,7 @@
             }
         } catch (e) {
             console.error(e);
-            alert("Erro: Configuração do Firebase ausente. Edite o arquivo HTML e insira suas chaves em YOUR_FIREBASE_CONFIG.");
+            alert("Erro: Configuração do Firebase ausente. Edite o arquivo HTML e insira suas chaves em manualConfig.");
         }
 
         const app = initializeApp(firebaseConfig);
@@ -250,9 +240,9 @@
         // Inicialização: Autenticação
         async function initApp() {
             try {
-                // Se estiver usando configuração interna e houver token, usa ele.
-                // Se for configuração pessoal (YOUR_FIREBASE_CONFIG), usa login anônimo direto.
-                if (!YOUR_FIREBASE_CONFIG && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                // Se NÃO tiver configuração manual (está usando a do chat), tenta token.
+                // Se TIVER configuração manual, vai direto para login anônimo.
+                if (!manualConfig && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
