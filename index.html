@@ -174,7 +174,7 @@
     <!-- Firebase Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Configuração Firebase
@@ -203,18 +203,22 @@
         const connectionStatus = document.getElementById('connection-status');
         const btnAdd = document.getElementById('btn-add');
 
-        // Inicialização: Autenticação Anônima
+        // Inicialização: Autenticação
         async function initApp() {
             try {
-                // Tentamos usar token customizado se existir (ambiente de dev) ou anônimo
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                     // Lógica interna para ambiente seguro, se aplicável
+                    await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
             } catch (error) {
                 console.error("Erro na autenticação:", error);
-                await signInAnonymously(auth);
+                // Fallback
+                try {
+                    await signInAnonymously(auth);
+                } catch (e) {
+                    console.error("Erro fatal:", e);
+                }
             }
         }
         
