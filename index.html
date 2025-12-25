@@ -177,13 +177,57 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Configuração Firebase
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // =========================================================================
+        // ÁREA DE CONFIGURAÇÃO PESSOAL (PREENCHA AQUI)
+        // =========================================================================
+        // Cole sua configuração do Firebase abaixo para usar seu próprio projeto.
+        // Se deixar vazio (null), o sistema tentará usar a config interna do chat (só funciona aqui).
+        
+        const firebaseConfig = {
+  apiKey: "AIzaSyDKnOop0iczUQzgGNNruwytPQCcUgY7QGA",
+  authDomain: "gestorlojas-b0e01.firebaseapp.com",
+  projectId: "gestorlojas-b0e01",
+  storageBucket: "gestorlojas-b0e01.firebasestorage.app",
+  messagingSenderId: "1094446006782",
+  appId: "1:1094446006782:web:875e86a4b6edcabf3c80af"
+}; 
+        
+        /* EXEMPLO DE COMO DEVE FICAR:
+        const YOUR_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyD-...",
+            authDomain: "seu-projeto.firebaseapp.com",
+            projectId: "seu-projeto",
+            storageBucket: "seu-projeto.appspot.com",
+            messagingSenderId: "123456...",
+            appId: "1:1234..."
+        };
+        */
+        // =========================================================================
+
+        // Determina qual configuração usar (Sua pessoal OU a do ambiente de teste)
+        let firebaseConfig;
+        let appId = 'meu-portal-lojas'; // Nome padrão para seu uso pessoal
+
+        try {
+            if (YOUR_FIREBASE_CONFIG) {
+                firebaseConfig = YOUR_FIREBASE_CONFIG;
+                console.log("Usando configuração pessoal do Firebase.");
+            } else if (typeof __firebase_config !== 'undefined') {
+                firebaseConfig = JSON.parse(__firebase_config);
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                console.log("Usando configuração interna do Canvas.");
+            } else {
+                throw new Error("Nenhuma configuração do Firebase encontrada.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Erro: Configuração do Firebase ausente. Edite o arquivo HTML e insira suas chaves em YOUR_FIREBASE_CONFIG.");
+        }
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
+        
         // Variáveis de Estado
         let stores = []; 
         let currentUser = null;
@@ -206,18 +250,21 @@
         // Inicialização: Autenticação
         async function initApp() {
             try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                // Se estiver usando configuração interna e houver token, usa ele.
+                // Se for configuração pessoal (YOUR_FIREBASE_CONFIG), usa login anônimo direto.
+                if (!YOUR_FIREBASE_CONFIG && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
             } catch (error) {
                 console.error("Erro na autenticação:", error);
-                // Fallback
+                // Fallback para tentar anônimo caso token falhe
                 try {
                     await signInAnonymously(auth);
                 } catch (e) {
-                    console.error("Erro fatal:", e);
+                    console.error("Erro fatal de login:", e);
+                    alert("Erro ao conectar no banco de dados. Verifique se a 'Autenticação Anônima' está ativada no seu console Firebase.");
                 }
             }
         }
@@ -231,7 +278,7 @@
                 connectionStatus.title = "Conectado e Sincronizado";
                 
                 // Configurar Listener do Firestore (Tempo Real)
-                // Usamos 'public' para que todos com acesso ao sistema vejam as mesmas lojas
+                // Usamos 'public' para compartilhar entre usuarios do mesmo app
                 const q = query(
                     collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME),
                     orderBy('createdAt', 'asc')
@@ -250,7 +297,9 @@
                     renderConfigList();
                 }, (error) => {
                     console.error("Erro ao buscar dados:", error);
-                    storeListEl.innerHTML = `<p class="text-red-400 text-center text-sm p-4">Erro ao carregar lojas. Tente recarregar.</p>`;
+                    let msg = "Erro ao carregar lojas.";
+                    if (error.code === 'permission-denied') msg += " (Permissão negada)";
+                    storeListEl.innerHTML = `<p class="text-red-400 text-center text-sm p-4">${msg}</p>`;
                 });
             } else {
                 connectionStatus.classList.add('bg-red-500');
@@ -318,10 +367,9 @@
                 // Limpar inputs
                 nameInput.value = '';
                 urlInput.value = '';
-                // Não precisamos chamar render() aqui, o onSnapshot fará isso automaticamente
             } catch (error) {
                 console.error("Erro ao adicionar:", error);
-                alert("Erro ao salvar. Verifique sua conexão.");
+                alert("Erro ao salvar. Verifique se o banco de dados foi criado no Firebase.");
             } finally {
                 btnAdd.disabled = false;
                 btnAdd.textContent = 'Adicionar';
