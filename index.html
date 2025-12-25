@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal de Lojas - Gestão Centralizada</title>
+    <!-- Tailwind CSS para o visual -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Ícones Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Ajuste para garantir que o iframe ocupe a altura correta */
+        .sheet-container {
+            height: calc(100vh - 64px);
+        }
+        /* Esconder scrollbar do menu mas manter funcionalidade */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans overflow-hidden">
+
+    <!-- App Container -->
+    <div class="flex h-screen w-full">
+
+        <!-- Sidebar (Menu Lateral) -->
+        <div class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-10">
+            <!-- Logo / Título -->
+            <div class="p-6 border-b border-slate-700 flex items-center gap-3">
+                <i data-lucide="layout-grid" class="w-6 h-6 text-green-400"></i>
+                <h1 class="text-xl font-bold tracking-wider">GestorSheets</h1>
+            </div>
+
+            <!-- Lista de Lojas -->
+            <div class="flex-1 overflow-y-auto py-4 scrollbar-hide" id="store-list">
+                <!-- As lojas serão inseridas aqui via JavaScript -->
+                <p class="text-slate-500 text-center text-sm px-4 mt-4">Nenhuma loja cadastrada.</p>
+            </div>
+
+            <!-- Botão de Configuração -->
+            <div class="p-4 border-t border-slate-700 bg-slate-800">
+                <button onclick="openConfigModal()" class="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded transition-colors text-sm font-medium">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                    Gerenciar Lojas
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content (Área da Planilha) -->
+        <div class="flex-1 flex flex-col relative bg-white">
+            
+            <!-- Barra de Topo -->
+            <div class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-10">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-500 text-sm">Visualizando:</span>
+                    <h2 id="current-store-title" class="text-lg font-semibold text-gray-800">Selecione uma loja</h2>
+                </div>
+                
+                <!-- Botão para abrir em nova aba (caso o iframe bloqueie) -->
+                <a id="external-link-btn" href="#" target="_blank" class="hidden flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                    Abrir no Google Sheets
+                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                </a>
+            </div>
+
+            <!-- Área do Iframe -->
+            <div class="flex-1 bg-gray-50 relative">
+                <!-- Placeholder inicial -->
+                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                    <i data-lucide="sheet" class="w-16 h-16 mb-4 text-gray-300"></i>
+                    <p class="text-lg">Selecione uma loja no menu lateral para carregar a planilha.</p>
+                </div>
+                
+                <!-- O Iframe da Planilha -->
+                <iframe id="sheet-frame" class="w-full h-full hidden border-none" src="" allow="clipboard-write"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Configuração -->
+    <div id="config-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="text-lg font-semibold text-gray-800">Configuração de Lojas</h3>
+                <button onclick="closeConfigModal()" class="text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto">
+                
+                <!-- Formulário de Adição -->
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-6">
+                    <h4 class="text-sm font-bold text-blue-800 mb-3 uppercase tracking-wide">Adicionar Nova Loja</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                        <div class="md:col-span-4">
+                            <input type="text" id="new-store-name" placeholder="Nome (Ex: Loja 101)" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        </div>
+                        <div class="md:col-span-6">
+                            <input type="text" id="new-store-url" placeholder="Link da Planilha Google" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        </div>
+                        <div class="md:col-span-2">
+                            <button onclick="addStore()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm font-medium transition-colors">
+                                Adicionar
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-xs text-blue-600 mt-2">
+                        * Cole o link completo do navegador quando estiver com a planilha aberta.
+                    </p>
+                </div>
+
+                <!-- Lista de Lojas Cadastradas (Tabela) -->
+                <div>
+                    <h4 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">Lojas Cadastradas</h4>
+                    <div class="border rounded-lg overflow-hidden">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-600 font-medium border-b">
+                                <tr>
+                                    <th class="px-4 py-3">Nome</th>
+                                    <th class="px-4 py-3">Link (Encurtado)</th>
+                                    <th class="px-4 py-3 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="config-store-list" class="divide-y divide-gray-100">
+                                <!-- Linhas geradas via JS -->
+                            </tbody>
+                        </table>
+                        <div id="no-stores-msg" class="p-8 text-center text-gray-500 hidden">
+                            Nenhuma loja configurada ainda.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                <button onclick="closeConfigModal()" class="px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded text-sm font-medium transition-colors">
+                    Concluir e Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Inicialização dos ícones
+        lucide.createIcons();
+
+        // Estado da aplicação (carrega do LocalStorage ou inicia vazio)
+        let stores = JSON.parse(localStorage.getItem('myStorePortalData')) || [
+            // Exemplo inicial para o usuário não ver tudo vazio (opcional)
+            // { id: 1, name: 'Exemplo - Loja Matriz', url: 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit' }
+        ];
+
+        // Referências DOM
+        const storeListEl = document.getElementById('store-list');
+        const iframeEl = document.getElementById('sheet-frame');
+        const emptyStateEl = document.getElementById('empty-state');
+        const currentTitleEl = document.getElementById('current-store-title');
+        const externalLinkBtn = document.getElementById('external-link-btn');
+        const configModal = document.getElementById('config-modal');
+        const configStoreListEl = document.getElementById('config-store-list');
+        const noStoresMsg = document.getElementById('no-stores-msg');
+
+        // Renderizar Menu Lateral
+        function renderSidebar() {
+            storeListEl.innerHTML = '';
+            
+            if (stores.length === 0) {
+                storeListEl.innerHTML = `<p class="text-slate-500 text-center text-sm px-4 mt-4 italic">Clique em "Gerenciar Lojas" abaixo para começar.</p>`;
+                return;
+            }
+
+            stores.forEach((store, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left px-6 py-3 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors border-l-4 border-transparent hover:border-green-400 focus:outline-none focus:bg-slate-800 focus:border-green-400 group flex items-center justify-between';
+                btn.onclick = () => loadStore(index);
+                btn.innerHTML = `
+                    <span class="font-medium truncate">${store.name}</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500"></i>
+                `;
+                storeListEl.appendChild(btn);
+            });
+            lucide.createIcons();
+        }
+
+        // Renderizar Lista no Modal de Configuração
+        function renderConfigList() {
+            configStoreListEl.innerHTML = '';
+            
+            if (stores.length === 0) {
+                noStoresMsg.classList.remove('hidden');
+            } else {
+                noStoresMsg.classList.add('hidden');
+                stores.forEach((store, index) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50';
+                    tr.innerHTML = `
+                        <td class="px-4 py-3 font-medium text-gray-800">${store.name}</td>
+                        <td class="px-4 py-3 text-gray-500 text-xs font-mono truncate max-w-[200px]">${store.url}</td>
+                        <td class="px-4 py-3 text-right">
+                            <button onclick="deleteStore(${index})" class="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors" title="Remover">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </td>
+                    `;
+                    configStoreListEl.appendChild(tr);
+                });
+                lucide.createIcons();
+            }
+        }
+
+        // Carregar Planilha no Iframe
+        function loadStore(index) {
+            const store = stores[index];
+            
+            // Atualiza UI
+            currentTitleEl.textContent = store.name;
+            emptyStateEl.classList.add('hidden');
+            iframeEl.classList.remove('hidden');
+            externalLinkBtn.classList.remove('hidden');
+            externalLinkBtn.href = store.url;
+            
+            // Tratamento da URL do Google Sheets para modo "embed" (melhor visualização)
+            // Se for um link de 'edit', tentamos manter, mas o ideal para visualização limpa é 'preview' ou 'htmlembed'
+            // Mas o usuário quer EDITAR, então mantemos a URL original ou limpamos parâmetros extras.
+            
+            // Dica: Adicionar ?widget=true&headers=false remove o topo do Google, mas remove o menu de edição também.
+            // Para editar, precisamos da URL normal.
+            
+            iframeEl.src = store.url;
+
+            // Feedback visual no menu lateral (active state)
+            const buttons = storeListEl.querySelectorAll('button');
+            buttons.forEach(b => {
+                b.classList.remove('bg-slate-800', 'border-green-400', 'text-white');
+                b.classList.add('border-transparent');
+            });
+            if (buttons[index]) {
+                buttons[index].classList.add('bg-slate-800', 'border-green-400', 'text-white');
+                buttons[index].classList.remove('border-transparent');
+            }
+        }
+
+        // Adicionar Loja
+        function addStore() {
+            const nameInput = document.getElementById('new-store-name');
+            const urlInput = document.getElementById('new-store-url');
+            
+            const name = nameInput.value.trim();
+            let url = urlInput.value.trim();
+
+            if (!name || !url) {
+                alert('Por favor, preencha o nome e o link da planilha.');
+                return;
+            }
+
+            // Validação simples de URL
+            if (!url.startsWith('http')) {
+                url = 'https://' + url;
+            }
+
+            stores.push({ name, url });
+            saveData();
+            
+            // Limpar inputs
+            nameInput.value = '';
+            urlInput.value = '';
+            
+            renderConfigList();
+            renderSidebar();
+        }
+
+        // Deletar Loja
+        function deleteStore(index) {
+            if(confirm('Tem certeza que deseja remover esta loja?')) {
+                stores.splice(index, 1);
+                saveData();
+                renderConfigList();
+                renderSidebar();
+                
+                // Se removeu a loja ativa, reseta a view
+                iframeEl.classList.add('hidden');
+                emptyStateEl.classList.remove('hidden');
+                externalLinkBtn.classList.add('hidden');
+                currentTitleEl.textContent = 'Selecione uma loja';
+            }
+        }
+
+        // Persistência
+        function saveData() {
+            localStorage.setItem('myStorePortalData', JSON.stringify(stores));
+        }
+
+        // Modal Logic
+        function openConfigModal() {
+            renderConfigList();
+            configModal.classList.remove('hidden');
+        }
+
+        function closeConfigModal() {
+            configModal.classList.add('hidden');
+        }
+
+        // Fechar modal ao clicar fora
+        configModal.addEventListener('click', (e) => {
+            if (e.target === configModal) closeConfigModal();
+        });
+
+        // Inicialização
+        renderSidebar();
+
+    </script>
+</body>
+</html>
