@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Ícones Lucide -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SortableJS para Arrastar e Soltar -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         /* Ajuste para garantir que o iframe ocupe a altura correta */
         .sheet-container {
@@ -35,23 +37,47 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Cursor de movimento para a linha da tabela ao passar no ícone */
+        .cursor-move-handle {
+            cursor: grab;
+        }
+        .cursor-move-handle:active {
+            cursor: grabbing;
+        }
+        /* Efeito visual enquanto arrasta */
+        .sortable-ghost {
+            background-color: #eff6ff; /* blue-50 */
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body class="bg-gray-100 font-sans overflow-hidden">
+
+    <!-- Overlay para Mobile (Fundo escuro quando menu abre) -->
+    <div id="mobile-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden transition-opacity opacity-0"></div>
 
     <!-- App Container -->
     <div class="flex h-screen w-full">
 
         <!-- Sidebar (Menu Lateral) -->
-        <div class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-10">
+        <!-- Alterado: Classes responsivas (fixed no mobile, relative no desktop) -->
+        <div id="sidebar" class="fixed inset-y-0 left-0 z-40 w-72 md:w-64 bg-slate-900 text-white flex flex-col shadow-2xl transition-transform duration-300 transform -translate-x-full md:translate-x-0 md:relative">
             <!-- Logo / Título -->
             <div class="p-6 border-b border-slate-700 flex items-center justify-between gap-2">
                 <div class="flex items-center gap-3">
                     <i data-lucide="layout-grid" class="w-6 h-6 text-green-400"></i>
                     <h1 class="text-xl font-bold tracking-wider">GestorSheets</h1>
                 </div>
-                <!-- Indicador de Status -->
-                <div id="connection-status" class="w-2 h-2 rounded-full bg-red-500" title="Desconectado"></div>
+                <!-- Botão fechar no mobile -->
+                <button onclick="toggleSidebar()" class="md:hidden text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <!-- Indicador de Status (Movido para baixo do logo) -->
+            <div class="px-6 py-2 flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50">
+                <div id="connection-status" class="w-2 h-2 rounded-full bg-red-500"></div>
+                <span id="status-text">Desconectado</span>
             </div>
 
             <!-- Lista de Lojas -->
@@ -64,8 +90,8 @@
             </div>
 
             <!-- Botão de Configuração -->
-            <div class="p-4 border-t border-slate-700 bg-slate-800">
-                <button onclick="window.openConfigModal()" class="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded transition-colors text-sm font-medium">
+            <div class="p-4 border-t border-slate-700 bg-slate-800 safe-area-bottom">
+                <button onclick="window.openConfigModal()" class="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white py-3 md:py-2 px-4 rounded transition-colors text-sm font-medium">
                     <i data-lucide="settings" class="w-4 h-4"></i>
                     Gerenciar Lojas
                 </button>
@@ -73,28 +99,36 @@
         </div>
 
         <!-- Main Content (Área da Planilha) -->
-        <div class="flex-1 flex flex-col relative bg-white">
+        <div class="flex-1 flex flex-col relative bg-white w-full">
             
             <!-- Barra de Topo -->
-            <div class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-10">
-                <div class="flex items-center gap-2">
-                    <span class="text-gray-500 text-sm">Visualizando:</span>
-                    <h2 id="current-store-title" class="text-lg font-semibold text-gray-800">Selecione uma loja</h2>
+            <div class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 shadow-sm z-10">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <!-- Botão Menu Hambúrguer (Só aparece no mobile) -->
+                    <button onclick="toggleSidebar()" class="md:hidden text-gray-600 hover:text-gray-900 focus:outline-none p-1 -ml-1">
+                        <i data-lucide="menu" class="w-6 h-6"></i>
+                    </button>
+
+                    <div class="flex flex-col md:flex-row md:items-center md:gap-2 overflow-hidden">
+                        <span class="text-gray-500 text-xs md:text-sm hidden md:inline">Visualizando:</span>
+                        <h2 id="current-store-title" class="text-base md:text-lg font-semibold text-gray-800 truncate">Selecione uma loja</h2>
+                    </div>
                 </div>
                 
-                <!-- Botão para abrir em nova aba (caso o iframe bloqueie) -->
-                <a id="external-link-btn" href="#" target="_blank" class="hidden flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
-                    Abrir no Google Sheets
+                <!-- Botão para abrir em nova aba -->
+                <a id="external-link-btn" href="#" target="_blank" class="hidden flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium whitespace-nowrap bg-blue-50 px-3 py-1.5 rounded-full md:bg-transparent md:p-0 md:rounded-none">
+                    <span class="hidden md:inline">Abrir no Google Sheets</span>
+                    <span class="md:hidden">Abrir</span>
                     <i data-lucide="external-link" class="w-4 h-4"></i>
                 </a>
             </div>
 
             <!-- Área do Iframe -->
-            <div class="flex-1 bg-gray-50 relative">
+            <div class="flex-1 bg-gray-50 relative overflow-hidden">
                 <!-- Placeholder inicial -->
-                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-4 text-center">
                     <i data-lucide="sheet" class="w-16 h-16 mb-4 text-gray-300"></i>
-                    <p class="text-lg">Selecione uma loja no menu lateral para carregar a planilha.</p>
+                    <p class="text-lg">Toque no menu <span class="md:hidden inline-block align-middle"><i data-lucide="menu" class="w-4 h-4"></i></span> para selecionar uma loja.</p>
                 </div>
                 
                 <!-- O Iframe da Planilha -->
@@ -104,20 +138,20 @@
     </div>
 
     <!-- Modal de Configuração -->
-    <div id="config-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+    <div id="config-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                <h3 class="text-lg font-semibold text-gray-800">Configuração de Lojas (Nuvem)</h3>
-                <button onclick="window.closeConfigModal()" class="text-gray-400 hover:text-gray-600">
+                <h3 class="text-lg font-semibold text-gray-800">Lojas</h3>
+                <button onclick="window.closeConfigModal()" class="text-gray-400 hover:text-gray-600 p-2 -mr-2">
                     <i data-lucide="x" class="w-6 h-6"></i>
                 </button>
             </div>
             
-            <div class="p-6 overflow-y-auto">
+            <div class="p-4 md:p-6 overflow-y-auto">
                 
                 <!-- Formulário de Adição -->
                 <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-6">
-                    <h4 class="text-sm font-bold text-blue-800 mb-3 uppercase tracking-wide">Adicionar Nova Loja</h4>
+                    <h4 class="text-sm font-bold text-blue-800 mb-3 uppercase tracking-wide">Nova Loja</h4>
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
                         <div class="md:col-span-4">
                             <input type="text" id="new-store-name" placeholder="Nome (Ex: Loja 101)" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
@@ -131,20 +165,27 @@
                             </button>
                         </div>
                     </div>
-                    <p class="text-xs text-blue-600 mt-2">
-                        * Cole o link completo do navegador quando estiver com a planilha aberta.
-                    </p>
                 </div>
 
                 <!-- Lista de Lojas Cadastradas (Tabela) -->
                 <div>
-                    <h4 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">Lojas Cadastradas</h4>
+                    <div class="flex justify-between items-end mb-3">
+                        <h4 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Lojas Cadastradas</h4>
+                        <span class="text-xs text-gray-500 italic flex items-center gap-1">
+                            <i data-lucide="arrow-up-down" class="w-3 h-3"></i>
+                            <span class="hidden md:inline">Arraste para reordenar</span>
+                            <span class="md:hidden">Reordenar</span>
+                        </span>
+                    </div>
+                    
                     <div class="border rounded-lg overflow-hidden">
                         <table class="w-full text-sm text-left">
                             <thead class="bg-gray-50 text-gray-600 font-medium border-b">
                                 <tr>
+                                    <th class="px-2 py-3 w-10 text-center">#</th>
                                     <th class="px-4 py-3">Nome</th>
-                                    <th class="px-4 py-3">Link (Encurtado)</th>
+                                    <!-- Esconde Link no Mobile para ganhar espaço -->
+                                    <th class="hidden md:table-cell px-4 py-3">Link</th>
                                     <th class="px-4 py-3 text-right">Ações</th>
                                 </tr>
                             </thead>
@@ -153,7 +194,7 @@
                             </tbody>
                         </table>
                         <div id="no-stores-msg" class="p-8 text-center text-gray-500 hidden">
-                            Nenhuma loja configurada ainda.
+                            Nenhuma loja configurada.
                         </div>
                         <div id="loading-msg" class="p-8 text-center text-gray-500 hidden flex justify-center">
                              <div class="loader"></div>
@@ -164,8 +205,8 @@
             </div>
             
             <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-                <button onclick="window.closeConfigModal()" class="px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded text-sm font-medium transition-colors">
-                    Concluir e Salvar
+                <button onclick="window.closeConfigModal()" class="w-full md:w-auto px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded text-sm font-medium transition-colors">
+                    Concluir
                 </button>
             </div>
         </div>
@@ -175,14 +216,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, deleteDoc, updateDoc, writeBatch, doc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =========================================================================
-        // ÁREA DE CONFIGURAÇÃO PESSOAL (PREENCHA AQUI)
+        // ÁREA DE CONFIGURAÇÃO PESSOAL
         // =========================================================================
-        // Cole sua configuração do Firebase abaixo para usar seu próprio projeto.
-        // Se deixar vazio (null), o sistema tentará usar a config interna do chat (só funciona aqui).
-        
         const manualConfig = {
             apiKey: "AIzaSyDKnOop0iczUQzgGNNruwytPQCcUgY7QGA",
             authDomain: "gestorlojas-b0e01.firebaseapp.com",
@@ -191,12 +229,10 @@
             messagingSenderId: "1094446006782",
             appId: "1:1094446006782:web:875e86a4b6edcabf3c80af"
         };
-        
         // =========================================================================
 
-        // Determina qual configuração usar (Sua pessoal OU a do ambiente de teste)
         let firebaseConfig;
-        let appId = 'meu-portal-lojas'; // Nome padrão para seu uso pessoal
+        let appId = 'meu-portal-lojas';
 
         try {
             if (manualConfig) {
@@ -211,7 +247,7 @@
             }
         } catch (e) {
             console.error(e);
-            alert("Erro: Configuração do Firebase ausente. Edite o arquivo HTML e insira suas chaves em manualConfig.");
+            alert("Erro: Configuração do Firebase ausente.");
         }
 
         const app = initializeApp(firebaseConfig);
@@ -221,9 +257,14 @@
         // Variáveis de Estado
         let stores = []; 
         let currentUser = null;
+        let sortableInstance = null;
         const COLLECTION_NAME = 'stores';
 
         // Referências DOM
+        const sidebar = document.getElementById('sidebar');
+        const mobileOverlay = document.getElementById('mobile-overlay');
+        const statusText = document.getElementById('status-text');
+        
         const storeListEl = document.getElementById('store-list');
         const iframeEl = document.getElementById('sheet-frame');
         const emptyStateEl = document.getElementById('empty-state');
@@ -232,16 +273,30 @@
         const configModal = document.getElementById('config-modal');
         const configStoreListEl = document.getElementById('config-store-list');
         const noStoresMsg = document.getElementById('no-stores-msg');
-        const loadingMsg = document.getElementById('loading-msg');
         const initialLoader = document.getElementById('initial-loader');
         const connectionStatus = document.getElementById('connection-status');
         const btnAdd = document.getElementById('btn-add');
 
+        // Função de Toggle do Menu Mobile
+        window.toggleSidebar = function() {
+            const isClosed = sidebar.classList.contains('-translate-x-full');
+            
+            if (isClosed) {
+                // Abrir
+                sidebar.classList.remove('-translate-x-full');
+                mobileOverlay.classList.remove('hidden');
+                setTimeout(() => mobileOverlay.classList.remove('opacity-0'), 10); // Fade in
+            } else {
+                // Fechar
+                sidebar.classList.add('-translate-x-full');
+                mobileOverlay.classList.add('opacity-0');
+                setTimeout(() => mobileOverlay.classList.add('hidden'), 300); // Wait for transition
+            }
+        };
+
         // Inicialização: Autenticação
         async function initApp() {
             try {
-                // Se NÃO tiver configuração manual (está usando a do chat), tenta token.
-                // Se TIVER configuração manual, vai direto para login anônimo.
                 if (!manualConfig && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -249,12 +304,10 @@
                 }
             } catch (error) {
                 console.error("Erro na autenticação:", error);
-                // Fallback para tentar anônimo caso token falhe
                 try {
                     await signInAnonymously(auth);
                 } catch (e) {
                     console.error("Erro fatal de login:", e);
-                    alert("Erro ao conectar no banco de dados. Verifique se a 'Autenticação Anônima' está ativada no seu console Firebase.");
                 }
             }
         }
@@ -265,40 +318,46 @@
                 currentUser = user;
                 connectionStatus.classList.remove('bg-red-500');
                 connectionStatus.classList.add('bg-green-500');
-                connectionStatus.title = "Conectado e Sincronizado";
+                statusText.textContent = "Conectado";
                 
-                // Configurar Listener do Firestore (Tempo Real)
-                // Usamos 'public' para compartilhar entre usuarios do mesmo app
                 const q = query(
-                    collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME),
-                    orderBy('createdAt', 'asc')
+                    collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME)
                 );
 
                 onSnapshot(q, (snapshot) => {
-                    stores = snapshot.docs.map(doc => ({
+                    let fetchedStores = snapshot.docs.map(doc => ({
                         id: doc.id,
                         ...doc.data()
                     }));
+
+                    stores = fetchedStores.sort((a, b) => {
+                        const orderA = a.order ?? 999999;
+                        const orderB = b.order ?? 999999;
+                        if (orderA !== orderB) return orderA - orderB;
+                        const dateA = a.createdAt?.seconds || 0;
+                        const dateB = b.createdAt?.seconds || 0;
+                        return dateA - dateB;
+                    });
                     
-                    // Remover loader inicial se existir
                     if(initialLoader) initialLoader.classList.add('hidden');
                     
                     renderSidebar();
-                    renderConfigList();
+                    if(!configModal.classList.contains('hidden')) {
+                         renderConfigList();
+                    }
                 }, (error) => {
                     console.error("Erro ao buscar dados:", error);
                     let msg = "Erro ao carregar lojas.";
-                    if (error.code === 'permission-denied') msg += " (Permissão negada)";
                     storeListEl.innerHTML = `<p class="text-red-400 text-center text-sm p-4">${msg}</p>`;
                 });
             } else {
                 connectionStatus.classList.add('bg-red-500');
                 connectionStatus.classList.remove('bg-green-500');
+                statusText.textContent = "Desconectado";
             }
         });
 
-        // Funções Globais (Expostas para o HTML)
-        
+        // Funções Globais
         window.loadStore = function(index) {
             const store = stores[index];
             if(!store) return;
@@ -308,19 +367,13 @@
             iframeEl.classList.remove('hidden');
             externalLinkBtn.classList.remove('hidden');
             externalLinkBtn.href = store.url;
-            
             iframeEl.src = store.url;
 
-            // Feedback visual no menu
-            const buttons = storeListEl.querySelectorAll('button');
-            buttons.forEach(b => {
-                b.classList.remove('bg-slate-800', 'border-green-400', 'text-white');
-                b.classList.add('border-transparent');
-            });
-            // O botão pode não existir se a lista mudou, então buscamos pelo índice
-            if (buttons[index]) {
-                buttons[index].classList.add('bg-slate-800', 'border-green-400', 'text-white');
-                buttons[index].classList.remove('border-transparent');
+            renderSidebar();
+            
+            // Se estiver no mobile, fecha o menu após clicar
+            if (window.innerWidth < 768) {
+                window.toggleSidebar();
             }
         };
 
@@ -329,7 +382,6 @@
             
             const nameInput = document.getElementById('new-store-name');
             const urlInput = document.getElementById('new-store-url');
-            
             const name = nameInput.value.trim();
             let url = urlInput.value.trim();
 
@@ -337,29 +389,27 @@
                 alert('Por favor, preencha o nome e o link da planilha.');
                 return;
             }
-
             if (!url.startsWith('http')) {
                 url = 'https://' + url;
             }
 
-            // UI Loading state
             btnAdd.disabled = true;
             btnAdd.innerHTML = '<div class="loader w-4 h-4 border-white border-t-blue-600"></div>';
 
             try {
-                // Salvar no Firestore
+                const nextOrder = stores.length;
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), {
                     name: name,
                     url: url,
+                    order: nextOrder,
                     createdAt: serverTimestamp()
                 });
                 
-                // Limpar inputs
                 nameInput.value = '';
                 urlInput.value = '';
             } catch (error) {
                 console.error("Erro ao adicionar:", error);
-                alert("Erro ao salvar. Verifique se o banco de dados foi criado no Firebase.");
+                alert("Erro ao salvar.");
             } finally {
                 btnAdd.disabled = false;
                 btnAdd.textContent = 'Adicionar';
@@ -367,17 +417,17 @@
         };
 
         window.deleteStore = async function(id) {
-            if(confirm('Tem certeza que deseja remover esta loja para todos os usuários?')) {
+            if(confirm('Tem certeza que deseja remover esta loja?')) {
                 try {
                     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id));
-                    // Se a loja deletada estava aberta, resetamos a view
-                    iframeEl.classList.add('hidden');
-                    emptyStateEl.classList.remove('hidden');
-                    externalLinkBtn.classList.add('hidden');
-                    currentTitleEl.textContent = 'Selecione uma loja';
+                    if(stores.find(s => s.id === id && iframeEl.src.includes(s.url))) {
+                         iframeEl.classList.add('hidden');
+                         emptyStateEl.classList.remove('hidden');
+                         externalLinkBtn.classList.add('hidden');
+                         currentTitleEl.textContent = 'Selecione uma loja';
+                    }
                 } catch (error) {
                     console.error("Erro ao deletar:", error);
-                    alert("Erro ao remover item.");
                 }
             }
         };
@@ -385,13 +435,16 @@
         window.openConfigModal = function() {
             renderConfigList();
             configModal.classList.remove('hidden');
+            // Fecha o sidebar mobile se estiver aberto para focar no modal
+            if (window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) {
+                window.toggleSidebar();
+            }
         };
 
         window.closeConfigModal = function() {
             configModal.classList.add('hidden');
         };
 
-        // Render Functions
         function renderSidebar() {
             storeListEl.innerHTML = '';
             
@@ -401,8 +454,11 @@
             }
 
             stores.forEach((store, index) => {
+                const isActive = iframeEl.src === store.url;
+                const activeClass = isActive ? 'bg-slate-800 border-green-400 text-white' : 'border-transparent text-slate-300';
+                
                 const btn = document.createElement('button');
-                btn.className = 'w-full text-left px-6 py-3 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors border-l-4 border-transparent hover:border-green-400 focus:outline-none focus:bg-slate-800 focus:border-green-400 group flex items-center justify-between';
+                btn.className = `w-full text-left px-6 py-3 hover:bg-slate-800 hover:text-white transition-colors border-l-4 hover:border-green-400 focus:outline-none group flex items-center justify-between ${activeClass}`;
                 btn.onclick = () => window.loadStore(index);
                 btn.innerHTML = `
                     <span class="font-medium truncate">${store.name}</span>
@@ -422,10 +478,14 @@
                 noStoresMsg.classList.add('hidden');
                 stores.forEach((store) => {
                     const tr = document.createElement('tr');
-                    tr.className = 'hover:bg-gray-50';
+                    tr.className = 'hover:bg-gray-50 bg-white group';
+                    tr.setAttribute('data-id', store.id);
                     tr.innerHTML = `
+                        <td class="px-2 py-3 text-center text-gray-400 cursor-move-handle" title="Arrastar para mover">
+                            <i data-lucide="grip-vertical" class="w-4 h-4 mx-auto hover:text-gray-600"></i>
+                        </td>
                         <td class="px-4 py-3 font-medium text-gray-800">${store.name}</td>
-                        <td class="px-4 py-3 text-gray-500 text-xs font-mono truncate max-w-[200px]">${store.url}</td>
+                        <td class="hidden md:table-cell px-4 py-3 text-gray-500 text-xs font-mono truncate max-w-[200px]">${store.url}</td>
                         <td class="px-4 py-3 text-right">
                             <button onclick="window.deleteStore('${store.id}')" class="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors" title="Remover">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -435,14 +495,50 @@
                     configStoreListEl.appendChild(tr);
                 });
                 lucide.createIcons();
+                initSortable();
             }
         }
 
-        // Setup inicial
+        function initSortable() {
+            if (sortableInstance) sortableInstance.destroy();
+            sortableInstance = new Sortable(configStoreListEl, {
+                animation: 150,
+                handle: '.cursor-move-handle',
+                ghostClass: 'sortable-ghost',
+                onEnd: async function (evt) {
+                    await saveNewOrder();
+                },
+            });
+        }
+
+        async function saveNewOrder() {
+            if (!currentUser) return;
+            const rows = configStoreListEl.querySelectorAll('tr');
+            const batch = writeBatch(db);
+            let hasChanges = false;
+
+            rows.forEach((row, index) => {
+                const id = row.getAttribute('data-id');
+                const store = stores.find(s => s.id === id);
+                if (store && store.order !== index) {
+                    const ref = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id);
+                    batch.update(ref, { order: index });
+                    hasChanges = true;
+                }
+            });
+
+            if (hasChanges) {
+                try {
+                    await batch.commit();
+                } catch (error) {
+                    console.error("Erro ao salvar ordem:", error);
+                }
+            }
+        }
+
         lucide.createIcons();
         initApp();
         
-        // Fechar modal ao clicar fora
         configModal.addEventListener('click', (e) => {
             if (e.target === configModal) window.closeConfigModal();
         });
